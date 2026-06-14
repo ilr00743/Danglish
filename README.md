@@ -80,3 +80,7 @@ Open:
 
 And indexed with:
 - `GIN (search_vector)`
+
+## Deployment
+
+For the first private launch on Vercel, Render Web Service, and Render PostgreSQL, see [DEPLOYMENT.md](DEPLOYMENT.md).
