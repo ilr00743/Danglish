@@ -11,10 +11,19 @@ from sqlalchemy.orm import Session, sessionmaker
 
 load_dotenv()
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+psycopg://postgres:postgres@localhost:5432/danglish",
-)
+DEFAULT_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/danglish"
+
+
+def get_database_url() -> str:
+    database_url = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+    if database_url.startswith("postgres://"):
+        return database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return database_url
+
+
+DATABASE_URL = get_database_url()
 
 engine: Engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)

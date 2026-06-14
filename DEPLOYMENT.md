@@ -39,6 +39,8 @@ DATABASE_URL=<render-internal-postgres-url>
 BACKEND_CORS_ORIGINS=https://<vercel-app>.vercel.app,http://localhost:3000,http://127.0.0.1:3000
 ```
 
+Render may provide `DATABASE_URL` with a `postgres://` or `postgresql://` scheme. The backend normalizes either form to SQLAlchemy's `postgresql+psycopg://` driver URL at startup.
+
 Do not set `YOUTUBE_API_KEY` on the hosted backend for this private launch. There is no production web ingestion endpoint.
 
 After the service deploys, check:
