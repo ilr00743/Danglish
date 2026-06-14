@@ -4,4 +4,4 @@ SQLAlchemy==2.0.41
 psycopg[binary]==3.2.9
 python-dotenv==1.0.1
 google-api-python-client==2.170.0
-youtube-transcript-api==1.2.2
+youtube-transcript-api==1.2.4

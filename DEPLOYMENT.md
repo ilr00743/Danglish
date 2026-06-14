@@ -30,6 +30,8 @@ Create a Render Web Service connected to this repository.
 - Branch: `master`
 - Auto-deploy: enabled
 
+The repo pins Render's Python runtime with `.python-version` at the repository root. If the Render dashboard overrides this, set `PYTHON_VERSION` to a fully qualified Python 3.13 version, such as `3.13.5`.
+
 Set these environment variables in Render:
 
 ```text
