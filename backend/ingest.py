@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import argparse
 
-from dotenv import load_dotenv
-
 from database import initialize_schema
 from ingestion_pipeline import ingest_channels
 from youtube_adapter import get_youtube_client
 
-load_dotenv()
+
+def load_env_file() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ModuleNotFoundError:
+        return
+
+    load_dotenv()
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,6 +35,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    load_env_file()
     args = parse_args()
     initialize_schema()
     youtube = get_youtube_client()

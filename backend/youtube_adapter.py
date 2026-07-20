@@ -1,12 +1,28 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import os
 from typing import Any, Iterable
 
-from googleapiclient.discovery import build
+
+@dataclass(frozen=True)
+class DanishTranscriptInspection:
+    status: str
+    language_code: str | None = None
+    is_generated: bool | None = None
+    error: str | None = None
 
 
 def get_youtube_client() -> Any:
+    try:
+        from googleapiclient.discovery import build
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "Missing backend dependency 'google-api-python-client'. "
+            "From the backend folder, activate the virtual environment and run "
+            "'pip install -r requirements.txt'."
+        ) from exc
+
     api_key = os.getenv("YOUTUBE_API_KEY")
     if not api_key:
         raise RuntimeError("Missing YOUTUBE_API_KEY in environment.")
@@ -49,7 +65,11 @@ def iter_channel_videos(youtube: Any, uploads_playlist_id: str) -> Iterable[dict
             video_id = resource.get("videoId")
             title = snippet.get("title")
             if video_id and title:
-                yield {"video_id": video_id, "title": title}
+                yield {
+                    "video_id": video_id,
+                    "title": title,
+                    "published_at": snippet.get("publishedAt", ""),
+                }
 
         page_token = response.get("nextPageToken")
         if not page_token:
@@ -83,3 +103,40 @@ def fetch_manual_danish_transcript(video_id: str) -> list[dict[str, Any]] | None
         return normalize_transcript_entries(selected.fetch())
     except Exception:
         return None
+
+
+def inspect_danish_transcript(
+    video_id: str,
+    transcript_api: Any | None = None,
+) -> DanishTranscriptInspection:
+    if transcript_api is None:
+        from youtube_transcript_api import YouTubeTranscriptApi
+
+        transcript_api = YouTubeTranscriptApi()
+
+    try:
+        transcript_list = transcript_api.list(video_id)
+    except Exception as exc:
+        return DanishTranscriptInspection(status="lookup_failed", error=str(exc))
+
+    try:
+        manual = transcript_list.find_manually_created_transcript(["da"])
+        return DanishTranscriptInspection(
+            status="manual_da",
+            language_code=getattr(manual, "language_code", "da"),
+            is_generated=False,
+        )
+    except Exception:
+        pass
+
+    try:
+        generated = transcript_list.find_generated_transcript(["da"])
+        return DanishTranscriptInspection(
+            status="generated_da",
+            language_code=getattr(generated, "language_code", "da"),
+            is_generated=True,
+        )
+    except Exception:
+        pass
+
+    return DanishTranscriptInspection(status="no_da")
