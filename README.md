@@ -51,9 +51,26 @@ python ingest.py --channel-ids UCxxxxxxxxxxxx,UCyyyyyyyyyyyy
 
 What it does:
 - Uses `google-api-python-client` to list channel uploads.
-- Uses `youtube-transcript-api` to fetch Danish (`da`) transcripts.
+- Uses `youtube-transcript-api` to fetch manually added Danish (`da`) transcripts.
 - Stores `videos` and `captions` rows in PostgreSQL.
 - Maintains a Danish full-text search GIN index via `schema.sql`.
+
+## Caption Discovery
+
+Before ingesting a new channel, generate a caption availability report:
+
+```bash
+python discover_captions.py --channel-ids UCxxxxxxxxxxxx,UCyyyyyyyyyyyy --output caption-report.csv
+```
+
+The discovery report scans older uploads first by default and records each video's:
+- video id
+- title
+- channel name
+- publish date
+- Danish caption status: `manual_da`, `generated_da`, `no_da`, or `lookup_failed`
+
+Use `--format json` for JSON output, `--newer-first` to reverse the scan order, and `--limit` for a smaller first pass.
 
 ## Frontend Setup (Next.js + Tailwind)
 
