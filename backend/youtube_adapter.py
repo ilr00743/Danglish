@@ -2,7 +2,71 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
-from typing import Any, Iterable
+import socket
+from typing import Any, Iterable, Sequence
+
+
+DEFAULT_YOUTUBE_HTTP_TIMEOUT_SECONDS = 15
+YOUTUBE_HOST_SUFFIXES = (
+    "googleapis.com",
+    "youtube.com",
+    "youtubei.googleapis.com",
+)
+_ORIGINAL_GETADDRINFO = socket.getaddrinfo
+
+
+def get_youtube_http_timeout_seconds() -> int:
+    raw_timeout = os.getenv("YOUTUBE_HTTP_TIMEOUT_SECONDS", str(DEFAULT_YOUTUBE_HTTP_TIMEOUT_SECONDS))
+    try:
+        timeout = int(raw_timeout)
+    except ValueError as exc:
+        raise ValueError("YOUTUBE_HTTP_TIMEOUT_SECONDS must be an integer.") from exc
+
+    if timeout <= 0:
+        raise ValueError("YOUTUBE_HTTP_TIMEOUT_SECONDS must be greater than zero.")
+    return timeout
+
+
+def should_force_youtube_ipv4() -> bool:
+    raw_value = os.getenv("YOUTUBE_FORCE_IPV4", "1").strip().lower()
+    return raw_value not in {"0", "false", "no", "off"}
+
+
+def is_youtube_host(host: object) -> bool:
+    if not isinstance(host, str):
+        return False
+    normalized = host.rstrip(".").lower()
+    return any(
+        normalized == suffix or normalized.endswith(f".{suffix}")
+        for suffix in YOUTUBE_HOST_SUFFIXES
+    )
+
+
+def prefer_ipv4_addresses(host: object, addresses: Sequence[Any]) -> list[Any]:
+    address_list = list(addresses)
+    if not should_force_youtube_ipv4() or not is_youtube_host(host):
+        return address_list
+
+    ipv4_addresses = [address for address in address_list if address[0] == socket.AF_INET]
+    return ipv4_addresses or address_list
+
+
+def install_youtube_ipv4_preference() -> None:
+    if not should_force_youtube_ipv4() or socket.getaddrinfo is not _ORIGINAL_GETADDRINFO:
+        return
+
+    def getaddrinfo_ipv4_first(
+        host: object,
+        port: object,
+        family: int = 0,
+        type: int = 0,
+        proto: int = 0,
+        flags: int = 0,
+    ) -> list[Any]:
+        addresses = _ORIGINAL_GETADDRINFO(host, port, family, type, proto, flags)
+        return prefer_ipv4_addresses(host, addresses)
+
+    socket.getaddrinfo = getaddrinfo_ipv4_first
 
 
 @dataclass(frozen=True)
@@ -15,6 +79,7 @@ class DanishTranscriptInspection:
 
 def get_youtube_client() -> Any:
     try:
+        import httplib2
         from googleapiclient.discovery import build
     except ModuleNotFoundError as exc:
         raise RuntimeError(
@@ -26,15 +91,24 @@ def get_youtube_client() -> Any:
     api_key = os.getenv("YOUTUBE_API_KEY")
     if not api_key:
         raise RuntimeError("Missing YOUTUBE_API_KEY in environment.")
-    return build("youtube", "v3", developerKey=api_key)
+    install_youtube_ipv4_preference()
+    http = httplib2.Http(timeout=get_youtube_http_timeout_seconds())
+    return build("youtube", "v3", developerKey=api_key, http=http)
 
 
 def fetch_channel_uploads_playlist_id(youtube: Any, channel_id: str) -> tuple[str, str]:
-    response = (
-        youtube.channels()
-        .list(part="contentDetails,snippet", id=channel_id, maxResults=1)
-        .execute()
-    )
+    try:
+        response = (
+            youtube.channels()
+            .list(part="contentDetails,snippet", id=channel_id, maxResults=1)
+            .execute()
+        )
+    except (TimeoutError, socket.timeout, OSError) as exc:
+        raise RuntimeError(
+            "Could not connect to the YouTube Data API at www.googleapis.com. "
+            "Check internet/VPN/firewall/proxy access, then retry."
+        ) from exc
+
     items = response.get("items", [])
     if not items:
         raise ValueError(f"Channel not found: {channel_id}")
@@ -95,6 +169,7 @@ def normalize_transcript_entries(entries: Iterable[Any]) -> list[dict[str, Any]]
 def fetch_manual_danish_transcript(video_id: str) -> list[dict[str, Any]] | None:
     from youtube_transcript_api import YouTubeTranscriptApi
 
+    install_youtube_ipv4_preference()
     api = YouTubeTranscriptApi()
 
     try:
@@ -112,6 +187,7 @@ def inspect_danish_transcript(
     if transcript_api is None:
         from youtube_transcript_api import YouTubeTranscriptApi
 
+        install_youtube_ipv4_preference()
         transcript_api = YouTubeTranscriptApi()
 
     try:

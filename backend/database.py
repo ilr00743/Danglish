@@ -9,9 +9,12 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 DEFAULT_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/danglish"
+DEFAULT_DATABASE_CONNECT_TIMEOUT_SECONDS = 10
+DEFAULT_DATABASE_STATEMENT_TIMEOUT_MS = 30000
+DEFAULT_DATABASE_LOCK_TIMEOUT_MS = 10000
 
 
 def get_database_url() -> str:
@@ -23,9 +26,43 @@ def get_database_url() -> str:
     return database_url
 
 
+def get_positive_int_env(name: str, default: int) -> int:
+    raw_value = os.getenv(name, str(default))
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer.") from exc
+
+    if value <= 0:
+        raise ValueError(f"{name} must be greater than zero.")
+    return value
+
+
+def get_database_connect_args() -> dict[str, int | str]:
+    statement_timeout = get_positive_int_env(
+        "DATABASE_STATEMENT_TIMEOUT_MS",
+        DEFAULT_DATABASE_STATEMENT_TIMEOUT_MS,
+    )
+    lock_timeout = get_positive_int_env(
+        "DATABASE_LOCK_TIMEOUT_MS",
+        DEFAULT_DATABASE_LOCK_TIMEOUT_MS,
+    )
+    return {
+        "connect_timeout": get_positive_int_env(
+            "DATABASE_CONNECT_TIMEOUT_SECONDS",
+            DEFAULT_DATABASE_CONNECT_TIMEOUT_SECONDS,
+        ),
+        "options": f"-c statement_timeout={statement_timeout} -c lock_timeout={lock_timeout}",
+    }
+
+
 DATABASE_URL = get_database_url()
 
-engine: Engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+engine: Engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    connect_args=get_database_connect_args(),
+)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 

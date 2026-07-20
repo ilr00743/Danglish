@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from database import initialize_schema
 from ingestion_pipeline import ingest_channels
@@ -13,7 +14,7 @@ def load_env_file() -> None:
     except ModuleNotFoundError:
         return
 
-    load_dotenv()
+    load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 def parse_args() -> argparse.Namespace:
@@ -34,19 +35,33 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def parse_channel_ids(value: str) -> list[str]:
+    channel_ids = [part.strip() for part in value.split(",") if part.strip()]
+    if not channel_ids:
+        raise ValueError("Provide at least one channel ID.")
+    return channel_ids
+
+
+def log(message: str) -> None:
+    print(message, flush=True)
+
+
 def main() -> None:
     load_env_file()
     args = parse_args()
-    initialize_schema()
-    youtube = get_youtube_client()
+    channel_ids = parse_channel_ids(args.channel_ids)
 
-    channel_ids = [value.strip() for value in args.channel_ids.split(",") if value.strip()]
-    if not channel_ids:
-        raise ValueError("Provide at least one channel ID.")
+    log("[INFO] Initializing database schema...")
+    initialize_schema()
+    log("[INFO] Database schema ready.")
+
+    log("[INFO] Creating YouTube client...")
+    youtube = get_youtube_client()
+    log("[INFO] YouTube client ready.")
 
     stats = ingest_channels(youtube, channel_ids, args.sleep_ms)
 
-    print(f"[DONE] Processed videos: {stats['processed']}, skipped: {stats['skipped']}")
+    log(f"[DONE] Processed videos: {stats['processed']}, skipped: {stats['skipped']}")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import socket
 import unittest
+from unittest.mock import patch
 
-from youtube_adapter import inspect_danish_transcript
+from youtube_adapter import inspect_danish_transcript, prefer_ipv4_addresses
 
 
 class FakeTranscript:
@@ -86,6 +88,25 @@ class InspectDanishTranscriptTest(unittest.TestCase):
 
         self.assertEqual(inspection.status, "lookup_failed")
         self.assertIn("transcripts disabled", inspection.error or "")
+
+
+class YouTubeNetworkPreferenceTest(unittest.TestCase):
+    def test_prefers_ipv4_for_youtube_hosts_when_available(self) -> None:
+        ipv6 = (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2001:4860:4802:38::223", 443, 0, 0))
+        ipv4 = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("216.239.36.223", 443))
+
+        with patch.dict("os.environ", {"YOUTUBE_FORCE_IPV4": "1"}):
+            addresses = prefer_ipv4_addresses("www.googleapis.com", [ipv6, ipv4])
+
+        self.assertEqual(addresses, [ipv4])
+
+    def test_preserves_non_youtube_hosts(self) -> None:
+        ipv6 = (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2001:db8::1", 443, 0, 0))
+        ipv4 = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.0.2.1", 443))
+
+        addresses = prefer_ipv4_addresses("example.com", [ipv6, ipv4])
+
+        self.assertEqual(addresses, [ipv6, ipv4])
 
 
 if __name__ == "__main__":
