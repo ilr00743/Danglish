@@ -4,18 +4,18 @@ This runbook captures the first private deployment path:
 
 - Frontend: Vercel, deployed from `frontend/`
 - Backend: Render Web Service, deployed from `backend/`
-- Database: Render PostgreSQL
+- Database: PostgreSQL-compatible provider
 - Ingestion: local manual CLI only
 - Data: fresh curated ingest into an initially empty production database
 - Domain: platform URLs first, no custom domain
 
 The production data is disposable for this launch. It is okay to wipe and re-ingest while the channel set and ingestion process are still being shaped.
 
-## Render PostgreSQL
+## PostgreSQL Database
 
-1. Create a Render PostgreSQL instance.
-2. Copy the internal database URL for the backend service.
-3. Copy the external database URL for local ingestion from your machine.
+1. Create a PostgreSQL database with any provider, such as Neon, Render PostgreSQL, Supabase, Railway, or a self-managed Postgres instance.
+2. Copy the provider's connection string.
+3. If the provider requires SSL, keep its SSL query parameters in the connection string, such as `sslmode=require`.
 
 DanGlish initializes the schema automatically when the backend starts, using `backend/schema.sql`.
 
@@ -35,11 +35,11 @@ The repo pins Render's Python runtime with `.python-version` at the repository r
 Set these environment variables in Render:
 
 ```text
-DATABASE_URL=<render-internal-postgres-url>
+DATABASE_URL=<postgresql-connection-url>
 BACKEND_CORS_ORIGINS=https://<vercel-app>.vercel.app,http://localhost:3000,http://127.0.0.1:3000
 ```
 
-Render may provide `DATABASE_URL` with a `postgres://` or `postgresql://` scheme. The backend normalizes either form to SQLAlchemy's `postgresql+psycopg://` driver URL at startup.
+PostgreSQL providers may provide `DATABASE_URL` with a `postgres://` or `postgresql://` scheme and query parameters such as `sslmode=require`. The backend normalizes either scheme to SQLAlchemy's `postgresql+psycopg://` driver URL at startup while preserving query parameters.
 
 Do not set `YOUTUBE_API_KEY` on the hosted backend for this private launch. There is no production web ingestion endpoint.
 
@@ -79,7 +79,7 @@ The hosted backend only serves search and caption playback. Run ingestion locall
 Create or update `backend/.env` on your machine:
 
 ```text
-DATABASE_URL=<render-external-postgres-url>
+DATABASE_URL=<postgresql-connection-url>
 YOUTUBE_API_KEY=<your-local-youtube-api-key>
 ```
 
@@ -97,14 +97,14 @@ Channel IDs are passed manually for now. A channels table is intentionally defer
 The first private deployment is successful when:
 
 1. Render backend `/api/health` returns `{ "status": "ok" }`.
-2. The production database starts empty and the backend initializes the schema automatically.
+2. The production PostgreSQL database starts empty and the backend initializes the schema automatically.
 3. Local ingestion adds captions for one curated Danish channel.
 4. Vercel frontend search returns results for a known Danish word.
 5. Clicking a Search Match loads YouTube and seeks near the caption.
 
 ## Reset And Reingest
 
-While production data is disposable, use the Render dashboard to reset the database, or connect with `psql` and clear the indexed content:
+While production data is disposable, use your database provider dashboard to reset the database, or connect with `psql` and clear the indexed content:
 
 ```sql
 TRUNCATE captions, videos;

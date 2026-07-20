@@ -83,4 +83,4 @@ And indexed with:
 
 ## Deployment
 
-For the first private launch on Vercel, Render Web Service, and Render PostgreSQL, see [DEPLOYMENT.md](DEPLOYMENT.md).
+For the first private launch on Vercel, Render Web Service, and any PostgreSQL-compatible provider, see [DEPLOYMENT.md](DEPLOYMENT.md).
