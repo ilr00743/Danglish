@@ -4,6 +4,8 @@ import os
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from database import get_db, initialize_schema
@@ -43,6 +45,16 @@ def on_startup() -> None:
 @app.get("/api/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/ready")
+def readiness_check(db: Session = Depends(get_db)) -> dict[str, str]:
+    try:
+        db.execute(text("SELECT 1")).scalar_one()
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Database is not ready.") from exc
+
+    return {"status": "ok", "database": "ok"}
 
 
 @app.get("/api/search")

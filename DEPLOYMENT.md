@@ -55,6 +55,33 @@ Expected response:
 { "status": "ok" }
 ```
 
+In the Render service settings, set the HTTP health check path to:
+
+```text
+/api/health
+```
+
+Render uses this path to decide whether a newly deployed instance is ready for traffic and whether a running instance should be restarted.
+
+## Pulsetic Backend Monitor
+
+Use Pulsetic to monitor the hosted backend and send regular inbound traffic to the Render service.
+
+Create a Pulsetic HTTP/API monitor with:
+
+```text
+URL: https://<render-api-url>/api/ready
+Expected status: 200
+Expected response body keyword: ok
+Interval: 4 minutes
+```
+
+Pulsetic calls to `/api/ready` count as inbound HTTP traffic and run a cheap `SELECT 1` query against PostgreSQL. On a Render Free web service, this can keep the backend from idling out as long as the monitor keeps calling more often than Render's 15-minute idle window. For a Neon database with scale to zero enabled, the database query can also keep the compute active as long as the monitor runs more often than Neon's idle window. Neon Free computes suspend after 5 minutes of inactivity, so use a 4-minute interval instead of a 5-minute interval to leave room for monitor jitter.
+
+If Pulsetic reports `/api/health` as online but `/api/ready` as offline, the backend process is reachable but the database connection is failing or Neon has not woken successfully.
+
+Render can still restart or suspend Free services for platform maintenance, usage limits, or other Free-tier limits, and Neon can still suspend Free computes if no query reaches it within the idle window. This monitor is useful for a private launch but not a substitute for paid always-on instances.
+
 ## Vercel Frontend
 
 Create a Vercel project connected to this repository.
@@ -121,5 +148,4 @@ These are intentionally out of scope for the first private deployment:
 - Channels table
 - Hosted ingestion job
 - Ingestion queue
-- Monitoring and alerting
 - Custom domain
