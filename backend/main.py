@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import logging
 import os
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -15,6 +16,7 @@ DEFAULT_CORS_ORIGINS = (
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 )
+health_logger = logging.getLogger("uvicorn.error")
 
 
 def get_cors_origins() -> list[str]:
@@ -24,6 +26,27 @@ def get_cors_origins() -> list[str]:
 
     origins = [origin.strip() for origin in configured_origins.split(",") if origin.strip()]
     return origins or list(DEFAULT_CORS_ORIGINS)
+
+
+def get_request_client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        return forwarded_for.split(",", maxsplit=1)[0].strip()
+
+    if request.client:
+        return request.client.host
+
+    return "unknown"
+
+
+def log_health_probe(endpoint: str, request: Request, status: str) -> None:
+    health_logger.info(
+        "health_probe endpoint=%s status=%s client_ip=%s user_agent=%r",
+        endpoint,
+        status,
+        get_request_client_ip(request),
+        request.headers.get("user-agent", ""),
+    )
 
 
 app = FastAPI(title="DanGlish API", version="1.0.0")
@@ -43,17 +66,20 @@ def on_startup() -> None:
 
 
 @app.get("/api/health")
-def healthcheck() -> dict[str, str]:
+def healthcheck(request: Request) -> dict[str, str]:
+    log_health_probe("/api/health", request, "ok")
     return {"status": "ok"}
 
 
 @app.get("/api/ready")
-def readiness_check(db: Session = Depends(get_db)) -> dict[str, str]:
+def readiness_check(request: Request, db: Session = Depends(get_db)) -> dict[str, str]:
     try:
         db.execute(text("SELECT 1")).scalar_one()
     except SQLAlchemyError as exc:
+        log_health_probe("/api/ready", request, "database_not_ready")
         raise HTTPException(status_code=503, detail="Database is not ready.") from exc
 
+    log_health_probe("/api/ready", request, "ok")
     return {"status": "ok", "database": "ok"}
 
 
