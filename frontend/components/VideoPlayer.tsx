@@ -8,6 +8,7 @@ type YouTubePlayerInstance = {
   loadVideoById: (args: { videoId: string; startSeconds: number }) => void;
   seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
   playVideo: () => void;
+  stopVideo: () => void;
   destroy: () => void;
 };
 
@@ -102,7 +103,13 @@ export default function VideoPlayer({
   }, []);
 
   useEffect(() => {
-    if (!videoId || !playerRef.current || !ready) {
+    if (!playerRef.current || !ready) {
+      return;
+    }
+
+    if (!videoId) {
+      playerRef.current.stopVideo();
+      onTimeChange?.(0);
       return;
     }
 
