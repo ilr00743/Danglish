@@ -49,6 +49,14 @@ From the `backend` folder:
 python ingest.py --channel-ids UCxxxxxxxxxxxx,UCyyyyyyyyyyyy
 ```
 
+Optional upload selection controls:
+
+```bash
+python ingest.py --channel-ids UCxxxxxxxxxxxx --older-first
+python ingest.py --channel-ids UCxxxxxxxxxxxx --newer-first
+python ingest.py --channel-ids UCxxxxxxxxxxxx --published-from 2020-01-01 --published-to 2021-12-31 --older-first
+```
+
 What it does:
 - Uses `google-api-python-client` to list channel uploads.
 - Uses `youtube-transcript-api` to fetch manually added Danish (`da`) transcripts.

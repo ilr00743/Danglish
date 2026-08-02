@@ -4,7 +4,11 @@ import socket
 import unittest
 from unittest.mock import patch
 
-from youtube_adapter import inspect_danish_transcript, prefer_ipv4_addresses
+from youtube_adapter import (
+    inspect_danish_transcript,
+    prefer_ipv4_addresses,
+    select_videos_by_date,
+)
 
 
 class FakeTranscript:
@@ -88,6 +92,61 @@ class InspectDanishTranscriptTest(unittest.TestCase):
 
         self.assertEqual(inspection.status, "lookup_failed")
         self.assertIn("transcripts disabled", inspection.error or "")
+
+
+class SelectVideosByDateTest(unittest.TestCase):
+    def test_filters_inclusive_date_range_and_sorts_oldest_first(self) -> None:
+        videos = [
+            {"video_id": "new", "title": "New", "published_at": "2026-06-01T10:00:00Z"},
+            {"video_id": "middle", "title": "Middle", "published_at": "2020-05-10T12:00:00Z"},
+            {"video_id": "old", "title": "Old", "published_at": "2018-01-01T10:00:00Z"},
+        ]
+
+        selected = select_videos_by_date(
+            videos,
+            older_first=True,
+            published_from="2020-05-10",
+            published_to="2026-06-01",
+        )
+
+        self.assertEqual([video["video_id"] for video in selected], ["middle", "new"])
+
+    def test_sorts_newest_first(self) -> None:
+        videos = [
+            {"video_id": "old", "title": "Old", "published_at": "2018-01-01T10:00:00Z"},
+            {"video_id": "new", "title": "New", "published_at": "2026-06-01T10:00:00Z"},
+        ]
+
+        selected = select_videos_by_date(videos, older_first=False)
+
+        self.assertEqual([video["video_id"] for video in selected], ["new", "old"])
+
+    def test_sorts_undated_videos_last_in_both_directions(self) -> None:
+        videos = [
+            {"video_id": "undated", "title": "Undated", "published_at": ""},
+            {"video_id": "old", "title": "Old", "published_at": "2018-01-01T10:00:00Z"},
+            {"video_id": "new", "title": "New", "published_at": "2026-06-01T10:00:00Z"},
+        ]
+
+        oldest_first = select_videos_by_date(videos, older_first=True)
+        newest_first = select_videos_by_date(videos, older_first=False)
+
+        self.assertEqual([video["video_id"] for video in oldest_first], ["old", "new", "undated"])
+        self.assertEqual([video["video_id"] for video in newest_first], ["new", "old", "undated"])
+
+    def test_date_filter_skips_undated_videos(self) -> None:
+        videos = [
+            {"video_id": "undated", "title": "Undated", "published_at": ""},
+            {"video_id": "dated", "title": "Dated", "published_at": "2020-01-01T10:00:00Z"},
+        ]
+
+        selected = select_videos_by_date(videos, published_from="2020-01-01")
+
+        self.assertEqual([video["video_id"] for video in selected], ["dated"])
+
+    def test_rejects_reversed_date_range(self) -> None:
+        with self.assertRaises(ValueError):
+            select_videos_by_date([], published_from="2026-01-01", published_to="2020-01-01")
 
 
 class YouTubeNetworkPreferenceTest(unittest.TestCase):

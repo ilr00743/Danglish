@@ -11,6 +11,7 @@ from youtube_adapter import (
     fetch_channel_uploads_playlist_id,
     fetch_manual_danish_transcript,
     iter_channel_videos,
+    select_videos_by_date,
 )
 
 
@@ -18,6 +19,9 @@ def ingest_channels(
     youtube: Any,
     channel_ids: list[str],
     sleep_ms: int,
+    older_first: bool | None = None,
+    published_from: str | None = None,
+    published_to: str | None = None,
 ) -> dict[str, int]:
     processed = 0
     skipped = 0
@@ -31,7 +35,15 @@ def ingest_channels(
             continue
 
         print(f"[INFO] Ingesting channel: {channel_name} ({channel_id})", flush=True)
-        for video in iter_channel_videos(youtube, uploads_playlist_id):
+        uploads = list(iter_channel_videos(youtube, uploads_playlist_id))
+        videos = select_videos_by_date(
+            uploads,
+            older_first=older_first,
+            published_from=published_from,
+            published_to=published_to,
+        )
+        print(f"[INFO] Selected {len(videos)} of {len(uploads)} uploads for ingestion", flush=True)
+        for video in videos:
             video_id = video["video_id"]
             title = video["title"]
             try:

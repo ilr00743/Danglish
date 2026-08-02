@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime, time, timezone
 import os
 import socket
 from typing import Any, Iterable, Sequence
@@ -75,6 +76,80 @@ class DanishTranscriptInspection:
     language_code: str | None = None
     is_generated: bool | None = None
     error: str | None = None
+
+
+def parse_youtube_datetime(value: str) -> datetime:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("Date value cannot be empty.")
+
+    if len(normalized) == 10:
+        parsed_date = date.fromisoformat(normalized)
+        return datetime.combine(parsed_date, time.min, tzinfo=timezone.utc)
+
+    if normalized.endswith("Z"):
+        normalized = f"{normalized[:-1]}+00:00"
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def parse_youtube_date_end(value: str) -> datetime:
+    normalized = value.strip()
+    if len(normalized) == 10:
+        parsed_date = date.fromisoformat(normalized)
+        return datetime.combine(parsed_date, time.max, tzinfo=timezone.utc)
+    return parse_youtube_datetime(normalized)
+
+
+def video_published_at(video: dict[str, str]) -> datetime | None:
+    published_at = video.get("published_at", "")
+    if not published_at:
+        return None
+    try:
+        return parse_youtube_datetime(published_at)
+    except ValueError:
+        return None
+
+
+def select_videos_by_date(
+    videos: Iterable[dict[str, str]],
+    *,
+    older_first: bool | None = None,
+    published_from: str | None = None,
+    published_to: str | None = None,
+) -> list[dict[str, str]]:
+    start = parse_youtube_datetime(published_from) if published_from else None
+    end = parse_youtube_date_end(published_to) if published_to else None
+    if start is not None and end is not None and start > end:
+        raise ValueError("published_from must be before or equal to published_to.")
+    selected: list[dict[str, str]] = []
+
+    for video in videos:
+        published_at = video_published_at(video)
+        if (start is not None or end is not None) and published_at is None:
+            continue
+        if start is not None and published_at is not None and published_at < start:
+            continue
+        if end is not None and published_at is not None and published_at > end:
+            continue
+        selected.append(video)
+
+    if older_first is not None:
+        dated_videos = [
+            (published_at, video)
+            for video in selected
+            if (published_at := video_published_at(video)) is not None
+        ]
+        undated_videos = [
+            video
+            for video in selected
+            if video_published_at(video) is None
+        ]
+        dated_videos.sort(key=lambda item: item[0], reverse=not older_first)
+        selected = [video for _, video in dated_videos] + undated_videos
+    return selected
 
 
 def get_youtube_client() -> Any:

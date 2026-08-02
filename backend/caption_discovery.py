@@ -11,6 +11,7 @@ from youtube_adapter import (
     fetch_channel_uploads_playlist_id,
     inspect_danish_transcript,
     iter_channel_videos,
+    select_videos_by_date,
 )
 
 
@@ -41,8 +42,7 @@ def discover_captions(
         uploads_playlist_id, channel_name = fetch_channel_uploads_playlist_id(youtube, channel_id)
         if progress:
             progress(f"[INFO] Listing uploads for {channel_name} ({channel_id})")
-        videos = list(iter_channel_videos(youtube, uploads_playlist_id))
-        videos.sort(key=lambda video: video.get("published_at", ""), reverse=not older_first)
+        videos = select_videos_by_date(iter_channel_videos(youtube, uploads_playlist_id), older_first=older_first)
         if progress:
             order = "oldest first" if older_first else "newest first"
             progress(f"[INFO] Found {len(videos)} uploads for {channel_name}; scanning {order}")

@@ -17,6 +17,7 @@ DEFAULT_CORS_ORIGINS = (
     "http://127.0.0.1:3000",
 )
 health_logger = logging.getLogger("uvicorn.error")
+search_logger = logging.getLogger("uvicorn.error")
 
 
 def get_cors_origins() -> list[str]:
@@ -85,6 +86,7 @@ def readiness_check(request: Request, db: Session = Depends(get_db)) -> dict[str
 
 @app.get("/api/search")
 def search_captions(
+    request: Request,
     q: str = Query(..., min_length=1, description="Danish search term"),
     limit: int = Query(30, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -93,7 +95,17 @@ def search_captions(
     if not query_text:
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
-    return {"results": search_caption_rows(db, query_text, limit)}
+    results = search_caption_rows(db, query_text, limit)
+    if not results:
+        search_logger.info(
+            "search_no_results query=%r limit=%s client_ip=%s user_agent=%r",
+            query_text,
+            limit,
+            get_request_client_ip(request),
+            request.headers.get("user-agent", ""),
+        )
+
+    return {"results": results}
 
 
 @app.get("/api/videos/{video_id}/captions")

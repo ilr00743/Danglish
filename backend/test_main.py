@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 from fastapi import HTTPException
 from sqlalchemy.exc import OperationalError
 
-from main import healthcheck, readiness_check
+from main import healthcheck, readiness_check, search_captions
 
 
 def make_request() -> Mock:
@@ -54,6 +54,30 @@ class HealthEndpointTest(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 503)
         self.assertEqual(context.exception.detail, "Database is not ready.")
+
+
+class SearchEndpointTest(unittest.TestCase):
+    def test_logs_when_search_has_no_results(self) -> None:
+        with patch("main.search_caption_rows", return_value=[]), patch("main.search_logger.info") as info:
+            response = search_captions(make_request(), q=" mangler ", limit=30, db=Mock())
+
+        self.assertEqual(response, {"results": []})
+        info.assert_called_once_with(
+            "search_no_results query=%r limit=%s client_ip=%s user_agent=%r",
+            "mangler",
+            30,
+            "203.0.113.10",
+            "Pulsetic",
+        )
+
+    def test_does_not_log_when_search_has_results(self) -> None:
+        results = [{"caption_id": 1, "text": "hej"}]
+
+        with patch("main.search_caption_rows", return_value=results), patch("main.search_logger.info") as info:
+            response = search_captions(make_request(), q="hej", limit=30, db=Mock())
+
+        self.assertEqual(response, {"results": results})
+        info.assert_not_called()
 
 
 if __name__ == "__main__":
